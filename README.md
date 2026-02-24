@@ -1,35 +1,16 @@
 # MCP Auth Demo (Eager Auth with Entra ID)
 
-This deploys an Enterprise AgentGateway setup with MCP servers (GitHub, Atlassian, GitLab) fronted by Microsoft Entra ID authentication, using helmfile.
+This deploys an Enterprise AgentGateway setup with MCP servers (GitHub, Atlassian, GitLab) fronted by Microsoft Entra ID authentication.
 
 ## Prerequisites
 
 1. A real domain with DNS pointing to your cluster (OAuth redirects require a publicly reachable URL)
-2. [helmfile](https://github.com/helmfile/helmfile) installed
-3. Follow [ENTRA.md](ENTRA.md) to set up the Entra login
-4. Follow [MCP_GITHUB.md](MCP_GITHUB.md) to set up the GitHub OAuth app
-5. Follow [MCP_ATLASSIAN.md](MCP_ATLASSIAN.md) to set up the Atlassian MCP server
-6. Follow [MCP_GITLAB.md](MCP_GITLAB.md) to set up the GitLab MCP server
-
-## Populating Secrets
-
-Copy the example and fill in your values:
-
-```bash
-cp client-secrets.yaml.example client-secrets.yaml
-```
-
-Edit `client-secrets.yaml` with your real values. See the linked docs above for where to obtain them.
-
-## Configuration
-
-- **`common-values.yaml`** — shared values (gateway name, external address, Entra tenant/client IDs). Update `gateway.externalAddress` to match your domain.
-- **`helmfile.yaml.gotmpl`** — helmfile that orchestrates all releases. To add a new MCP server, add a new `external-mcp` release following the existing pattern.
-- **`client-secrets.yaml`** — secret values (license key, Entra secret, GitHub credentials). Git-ignored.
-- **`mcp-auth-demo/`** — Helm charts for the base gateway infrastructure and per-MCP-server resources. Do not modify.
+2. Follow [ENTRA.md](ENTRA.md) to set up the Entra login
+3. Follow [MCP_GITHUB.md](MCP_GITHUB.md) to set up the GitHub OAuth app
+4. Follow [MCP_ATLASSIAN.md](MCP_ATLASSIAN.md) to set up the Atlassian MCP server
+5. Follow [MCP_GITLAB.md](MCP_GITLAB.md) to set up the GitLab MCP server
 
 ## Setup
-### Setup with helmfile
 
 1. Install the Gateway API CRDs and AgentGateway CRDs:
 
@@ -47,19 +28,7 @@ helm upgrade -i --create-namespace --namespace agentgateway-system enterprise-ag
 kubectl create secret tls tls --cert=tls.crt --key=tls.key -n agentgateway-system
 ```
 
-3. Deploy everything via helmfile:
-
-```bash
-helmfile sync --file helmfile.yaml.gotmpl
-```
-
-### Without helmfile
-
-If you don't have helmfile installed, you can use plain `helm` and `kubectl` instead.
-
-#### 1. Install Enterprise AgentGateway
-
-Create a values file (e.g. `agentgateway-values.yaml`) with your settings. Replace all `YOUR_*` placeholders:
+3. Install Enterprise AgentGateway. Create a values file (e.g. `agentgateway-values.yaml`) with your settings. Replace all `YOUR_*` placeholders:
 
 ```yaml
 licensing:
@@ -102,8 +71,6 @@ controller:
       }
 ```
 
-Then install:
-
 ```bash
 helm upgrade -i --create-namespace --namespace agentgateway-system enterprise-agentgateway \
         PATH_TO_ENTERPRISE_AGENTGATEWAY_CHART \
@@ -112,23 +79,102 @@ helm upgrade -i --create-namespace --namespace agentgateway-system enterprise-ag
 
 Where `PATH_TO_ENTERPRISE_AGENTGATEWAY_CHART` is the path to the `enterprise-agentgateway` Helm chart (e.g. a local checkout at `agentgateway-enterprise/ent-controller/install/generated/enterprise-agentgateway`).
 
-#### 2. Install the resources
-
-Render the remaining helmfile releases on a machine that has helmfile, then apply them with `kubectl`:
+4. Install the base gateway resources:
 
 ```bash
-# Render the resources (excluding the agentgateway install) to a single file
-helmfile template --file helmfile.yaml.gotmpl -l name!=enterprise-agentgateway > rendered.yaml
-
-# Then apply on any machine with kubectl
-kubectl apply -f rendered.yaml
+helm upgrade -i base-mcp-gateway -n default mcp-auth-demo/base \
+        --set gateway.name=mcp
 ```
 
-Or render to a directory for easier inspection:
+5. Install each MCP server using the `external-mcp` chart with inline values. Replace `YOUR_*` placeholders with your values.
+
+**GitLab** (DCR — uses `baseUrl`):
 
 ```bash
-helmfile template --file helmfile.yaml.gotmpl -l name!=enterprise-agentgateway --output-dir rendered/
+cat <<EOF | helm upgrade -i gitlab -n default mcp-auth-demo/external-mcp -f -
+gateway:
+  name: mcp
+  externalAddress: YOUR_EXTERNAL_ADDRESS
+entra:
+  tenantId: YOUR_ENTRA_TENANT_ID
+  clientId: YOUR_ENTRA_CLIENT_ID
+path: /mcp/gitlab
+mcp:
+  host: gitlab.com
+  path: /api/v4/mcp
+auth:
+  baseUrl: https://gitlab.com
+  scopes: [mcp]
+EOF
 ```
+
+**Atlassian** (DCR — uses `baseUrl`):
+
+```bash
+cat <<EOF | helm upgrade -i atlassian -n default mcp-auth-demo/external-mcp -f -
+gateway:
+  name: mcp
+  externalAddress: YOUR_EXTERNAL_ADDRESS
+entra:
+  tenantId: YOUR_ENTRA_TENANT_ID
+  clientId: YOUR_ENTRA_CLIENT_ID
+path: /mcp/atlassian
+mcp:
+  host: mcp.atlassian.com
+  path: /v1/mcp
+auth:
+  baseUrl: https://mcp.atlassian.com
+  scopes: [read:jira-work]
+EOF
+```
+
+**GitHub** (static credentials — uses `clientId`/`clientSecret`/`authorizeUrl`/`tokenUrl`):
+
+```bash
+cat <<EOF | helm upgrade -i github -n default mcp-auth-demo/external-mcp -f -
+gateway:
+  name: mcp
+  externalAddress: YOUR_EXTERNAL_ADDRESS
+entra:
+  tenantId: YOUR_ENTRA_TENANT_ID
+  clientId: YOUR_ENTRA_CLIENT_ID
+path: /mcp/github
+mcp:
+  host: api.githubcopilot.com
+auth:
+  clientId: YOUR_GITHUB_CLIENT_ID
+  clientSecret: YOUR_GITHUB_CLIENT_SECRET
+  authorizeUrl: https://github.com/login/oauth/authorize
+  tokenUrl: https://github.com/login/oauth/access_token
+  scopes: [repo, read:org]
+EOF
+```
+
+To preview the rendered manifests without installing, replace `helm upgrade -i` with `helm template` in any of the commands above.
+
+### With helmfile
+
+If you have [helmfile](https://github.com/helmfile/helmfile) installed, steps 3–5 above can be replaced with a single command.
+
+First, populate `common-values.yaml` and `client-secrets.yaml`:
+
+```bash
+cp common-values.yaml.example common-values.yaml
+cp client-secrets.yaml.example client-secrets.yaml
+```
+
+Edit both files with your real values:
+
+- **`common-values.yaml`** — gateway name, external address, Entra tenant/client IDs. Update `gateway.externalAddress` to match your domain.
+- **`client-secrets.yaml`** — license key, Entra client secret, GitHub OAuth credentials. Git-ignored.
+
+Then deploy:
+
+```bash
+helmfile sync --file helmfile.yaml.gotmpl
+```
+
+The helmfile reads secrets from `client-secrets.yaml` and shared config from `common-values.yaml`, so you don't need to pass them inline.
 
 ## Updating the TLS certificate
 
@@ -153,41 +199,51 @@ mkcert -install
 
 ## Adding a new MCP server
 
-GitHub, Gitlab and Atlassian are already configured. To add a different MCP server add a new release to `helmfile.yaml.gotmpl`. For MCP servers that support Dynamic Client Registration (DCR), use `baseUrl`:
+GitHub, Gitlab and Atlassian are already configured. To add a different MCP server, use the `external-mcp` chart.
 
-```yaml
-  - name: my-server
-    namespace: default
-    chart: ./mcp-auth-demo/external-mcp
-    values:
-    - common-values.yaml
-    - path: /mcp/my-server
-      mcp:
-        host: mcp.example.com
-        path: /v1/mcp
-      auth:
-        baseUrl: https://mcp.example.com
-        scopes: [read:data]
+For MCP servers that support Dynamic Client Registration (DCR), use `baseUrl`:
+
+```bash
+cat <<EOF | helm upgrade -i my-server -n default mcp-auth-demo/external-mcp -f -
+gateway:
+  name: mcp
+  externalAddress: YOUR_EXTERNAL_ADDRESS
+entra:
+  tenantId: YOUR_ENTRA_TENANT_ID
+  clientId: YOUR_ENTRA_CLIENT_ID
+path: /mcp/my-server
+mcp:
+  host: mcp.example.com
+  path: /v1/mcp
+auth:
+  baseUrl: https://mcp.example.com
+  scopes: [read:data]
+EOF
 ```
 
 For MCP servers that require static client credentials (like GitHub), specify `clientId`, `clientSecret`, `authorizeUrl`, and `tokenUrl` instead of `baseUrl`:
 
-```yaml
-  - name: my-server
-    namespace: default
-    chart: ./mcp-auth-demo/external-mcp
-    values:
-    - common-values.yaml
-    - path: /mcp/my-server
-      mcp:
-        host: api.example.com
-      auth:
-        clientId: '{{$secrets.myserver.id}}'
-        clientSecret: '{{$secrets.myserver.secret}}'
-        authorizeUrl: https://example.com/oauth/authorize
-        tokenUrl: https://example.com/oauth/token
-        scopes: [repo]
+```bash
+cat <<EOF | helm upgrade -i my-server -n default mcp-auth-demo/external-mcp -f -
+gateway:
+  name: mcp
+  externalAddress: YOUR_EXTERNAL_ADDRESS
+entra:
+  tenantId: YOUR_ENTRA_TENANT_ID
+  clientId: YOUR_ENTRA_CLIENT_ID
+path: /mcp/my-server
+mcp:
+  host: api.example.com
+auth:
+  clientId: YOUR_CLIENT_ID
+  clientSecret: YOUR_CLIENT_SECRET
+  authorizeUrl: https://example.com/oauth/authorize
+  tokenUrl: https://example.com/oauth/token
+  scopes: [repo]
+EOF
 ```
+
+If using helmfile, add a new release to `helmfile.yaml.gotmpl` following the same pattern (the `common-values.yaml` file provides the shared `gateway` and `entra` values).
 
 ## Testing using VS Code
 
