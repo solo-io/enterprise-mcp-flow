@@ -1,6 +1,6 @@
 {{- $secrets := (readFile "client-secrets.yaml" | fromYaml | expandSecretRefs) -}}
 releases:
-  - name: agentgateway
+  - name: enterprise-agentgateway
     namespace: agentgateway-system
     chart: ../agentgateway-enterprise/ent-controller/install/generated/enterprise-agentgateway
     values:

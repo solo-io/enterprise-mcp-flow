@@ -2,7 +2,7 @@
 {{- $common := (readFile "common-values.yaml" | fromYaml) -}}
 {{- $agw := (readFile "agentgateway-version.yaml" | fromYaml) -}}
 releases:
-  - name: agentgateway
+  - name: enterprise-agentgateway
     namespace: agentgateway-system
     chart: oci://us-central1-docker.pkg.dev/developers-369321/enterprise-agentgateway-public-nonprod/charts/enterprise-agentgateway
     version: {{$agw.version}}
