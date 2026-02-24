@@ -1,0 +1,87 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{.Values.gateway.name}}
+  namespace: {{.Values.gateway.namespace | default .Release.Namespace}}
+spec:
+  gatewayClassName: enterprise-agentgateway
+  infrastructure:
+    parametersRef:
+      name: {{.Values.gateway.name}}-params
+      group: enterpriseagentgateway.solo.io
+      kind: EnterpriseAgentgatewayParameters
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https
+      protocol: HTTPS
+      port: 443
+      allowedRoutes:
+        namespaces:
+          from: All
+      tls:
+        certificateRefs:
+          - name: tls
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayParameters
+metadata:
+  name: {{.Values.gateway.name}}-params
+  namespace: {{.Values.gateway.namespace | default .Release.Namespace}}
+spec:
+  logging:
+    level: upstream=debug,info
+  env:
+    - name: STS_URI
+      value: http://enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777/elicitations/oauth2/token
+    - name: STS_AUTH_TOKEN
+      value: /var/run/secrets/xds-tokens/xds-token
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: auth-server
+  namespace: {{.Values.gateway.namespace | default .Release.Namespace}}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+  rules:
+    - backendRefs:
+        - name: enterprise-agentgateway
+          namespace: agentgateway-system
+          port: 7777
+      matches:
+        - path:
+            type: PathPrefix
+            value: /oauth-issuer
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-service
+  namespace: agentgateway-system
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{.Values.gateway.namespace | default .Release.Namespace}}
+  to:
+    - group: ""
+      kind: Service
+      name: enterprise-agentgateway
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: entra-jwks
+  namespace: {{.Values.gateway.namespace | default .Release.Namespace}}
+spec:
+  static:
+    host: login.microsoftonline.com
+    port: 443
+  policies:
+    tls: {}  # Enable TLS

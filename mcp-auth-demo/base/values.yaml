@@ -1,0 +1,5 @@
+# Name of gateway to connect to
+gateway:
+  name: ""
+  namespace: ""
+postgres: true

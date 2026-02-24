@@ -1,0 +1,94 @@
+{{- $secrets := (readFile "client-secrets.yaml" | fromYaml | expandSecretRefs) -}}
+{{- $common := (readFile "common-values.yaml" | fromYaml) -}}
+{{- $agw := (readFile "agentgateway-version.yaml" | fromYaml) -}}
+releases:
+  - name: agentgateway
+    namespace: agentgateway-system
+    chart: oci://us-central1-docker.pkg.dev/developers-369321/enterprise-agentgateway-public-nonprod/charts/enterprise-agentgateway
+    version: {{$agw.version}}
+    values:
+    - licensing:
+        licenseKey: {{ $secrets.license }}
+      tokenExchange:
+        enabled: true
+        issuer: "enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777"
+        tokenExpiration: 24h
+        subjectValidator:
+          validatorType: remote
+          remoteConfig:
+            url: "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/discovery/v2.0/keys"
+        actorValidator:
+          validatorType: k8s
+        apiValidator:
+          validatorType: remote
+          remoteConfig:
+            url: http://solo-enterprise-ui.agentgateway-system.svc.cluster.local:5556/keys
+        database:
+          type: postgres
+          postgres:
+            url: postgres://myuser:mypassword@postgres.postgres:5432/mydb
+
+      controller:
+        extraEnv:
+          KGW_OAUTH_ISSUER_CONFIG: |
+            {
+              "gateway_config": {
+                "base_url": "{{$common.gateway.externalAddress}}/oauth-issuer"
+              },
+              "downstream_server": {
+                "name": "downstream",
+                "client_id": "{{$secrets.entra.id}}",
+                "client_secret": "{{$secrets.entra.secret}}",
+                "authorize_url": "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/oauth2/v2.0/authorize",
+                "token_url": "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/oauth2/v2.0/token",
+                "scopes": [
+                  "api://{{$secrets.entra.id}}/agentgateway"
+                ]
+              }
+            }
+  - name: base-mcp-gateway
+    namespace: default
+    chart: ./mcp-auth-demo/base
+    values:
+    - common-values.yaml
+
+  - name: github
+    namespace: default
+    chart: ./mcp-auth-demo/external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/github
+      mcp:
+        host: api.githubcopilot.com
+      auth:
+        clientId: '{{$secrets.github.id}}'
+        clientSecret: '{{$secrets.github.secret}}'
+        authorizeUrl: https://github.com/login/oauth/authorize
+        tokenUrl: https://github.com/login/oauth/access_token
+        scopes: [repo, read:org]
+
+  - name: atlassian
+    namespace: default
+    chart: ./mcp-auth-demo/external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/atlassian
+      mcp:
+        host: mcp.atlassian.com
+        path: /v1/mcp
+      auth:
+        baseUrl: https://mcp.atlassian.com
+        scopes: [read:jira-work]
+
+  - name: gitlab
+    namespace: default
+    chart: ./mcp-auth-demo/external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/gitlab
+      mcp:
+        host: gitlab.com
+        path: /api/v4/mcp
+      auth:
+        baseUrl: https://gitlab.com
+        scopes: [mcp]

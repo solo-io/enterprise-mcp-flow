@@ -1,0 +1,264 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gateway",
+    "path",
+    "mcp",
+    "auth",
+    "entra"
+  ],
+  "properties": {
+    "gateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "externalAddress"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "externalAddress": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host",
+        "path"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "path": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "boolean"
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scopes"
+      ],
+      "properties": {
+        "baseUrl": {
+          "type": "string"
+        },
+        "clientId": {
+          "type": "string"
+        },
+        "clientSecret": {
+          "type": "string"
+        },
+        "authorizeUrl": {
+          "type": "string"
+        },
+        "tokenUrl": {
+          "type": "string"
+        },
+        "registrationUrl": {
+          "type": "string"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "allOf": [
+              {
+                "required": [
+                  "baseUrl"
+                ],
+                "properties": {
+                  "baseUrl": {
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "anyOf": [
+                  {
+                    "required": [
+                      "authorizeUrl"
+                    ],
+                    "properties": {
+                      "authorizeUrl": {
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "tokenUrl"
+                    ],
+                    "properties": {
+                      "tokenUrl": {
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  {
+                    "required": [
+                      "registrationUrl"
+                    ],
+                    "properties": {
+                      "registrationUrl": {
+                        "minLength": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "baseUrl"
+              ],
+              "properties": {
+                "baseUrl": {
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "authorizeUrl",
+              "tokenUrl"
+            ],
+            "properties": {
+              "authorizeUrl": {
+                "minLength": 1
+              },
+              "tokenUrl": {
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "clientId"
+            ],
+            "properties": {
+              "clientId": {
+                "minLength": 1
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "clientSecret"
+            ],
+            "properties": {
+              "clientSecret": {
+                "minLength": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "clientId"
+              ],
+              "properties": {
+                "clientId": {
+                  "minLength": 1
+                }
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "registrationUrl"
+                ],
+                "properties": {
+                  "registrationUrl": {
+                    "minLength": 1
+                  }
+                }
+              },
+              {
+                "required": [
+                  "baseUrl"
+                ],
+                "properties": {
+                  "baseUrl": {
+                    "minLength": 1
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "entra": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tenantId",
+        "clientId",
+        "scopes"
+      ],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "clientId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

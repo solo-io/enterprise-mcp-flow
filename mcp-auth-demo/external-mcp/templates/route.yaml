@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - name: {{ .Values.gateway.name }}
+      {{- with .Values.gateway.namespace}}
+      namespace: {{ . }}
+      {{end}}
+  rules:
+    - backendRefs:
+        - name: {{ .Release.Name }}
+          kind: AgentgatewayBackend
+          group: agentgateway.dev
+      matches:
+        - path:
+            type: PathPrefix
+            value: {{.Values.path}}
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-protected-resource{{.Values.path}}
+        - path:
+            type: PathPrefix
+            value: /.well-known/oauth-authorization-server{{.Values.path}}

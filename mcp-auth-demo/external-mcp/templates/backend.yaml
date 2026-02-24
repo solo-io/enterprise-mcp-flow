@@ -1,0 +1,76 @@
+
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  mcp:
+    targets:
+      - name: mcp-target
+        static:
+          host: {{ .Values.mcp.host }}
+          port: {{ .Values.mcp.port }}
+          {{- with .Values.mcp.path }}
+          path: {{ . }}
+          {{- end}}
+  policies:
+    {{- if .Values.mcp.tls }}
+    tls: {}
+    {{- end }}
+    mcp:
+      authentication:
+        mode: Strict
+        issuer: https://sts.windows.net/{{.Values.entra.tenantId}}/
+        audiences:
+          - api://{{.Values.entra.clientId}}
+        jwks:
+          backendRef:
+            name: entra-jwks
+            kind: AgentgatewayBackend
+            group: agentgateway.dev
+          jwksPath: {{.Values.entra.tenantId}}/discovery/v2.0/keys
+        resourceMetadata:
+          agentgateway.dev/issuer-proxy: http://enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777/oauth-issuer
+          authorizationServers:
+            - {{.Values.gateway.externalAddress}}{{.Values.path}}
+          scopesSupported:
+          {{- with .Values.entra.scopes }}
+          {{ . | toYaml | nindent 10}}
+          {{- else }}
+            - api://{{.Values.entra.clientId}}/agentgateway
+          {{- end }}
+---
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: {{ .Release.Name }}-token-exchange
+  namespace: {{.Release.Namespace}}
+spec:
+  targetRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: {{.Release.Name}}
+  backend:
+    tokenExchange:
+      oidc:
+        secretName: {{ .Release.Name }}-token-exchange
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: {{ .Release.Name }}-token-exchange
+  namespace: {{.Release.Namespace}}
+stringData:
+  app_id: {{ .Release.Name |quote }}
+  {{ with .Values.auth.tokenUrl}}access_token_url: {{ . | quote }}{{end}}
+  {{ with .Values.auth.authorizeUrl}}authorize_url: {{ . | quote }}{{end}}
+  {{ with .Values.auth.registrationUrl}}registration_url: {{ . | quote }}{{end}}
+  {{ with .Values.auth.clientId}}client_id: {{ . | quote }}{{end}}
+  {{ with .Values.auth.clientSecret}}client_secret: {{ . | quote }}{{end}}
+  {{ with .Values.auth.baseUrl}}base_url: {{ . | quote }}{{end}}
+  mcp_resource: {{.Values.path|quote}}
+  scopes: {{ .Values.auth.scopes | join " " | quote }}
+

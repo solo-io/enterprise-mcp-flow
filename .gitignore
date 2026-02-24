@@ -1,0 +1,7 @@
+.env
+postgres.env
+tls.key
+tls.crt
+client-secrets.yaml
+common-values.yaml
+.vscode/mcp.json

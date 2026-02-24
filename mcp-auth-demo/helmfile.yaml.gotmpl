@@ -1,0 +1,118 @@
+{{- $secrets := (readFile "client-secrets.yaml" | fromYaml | expandSecretRefs) -}}
+releases:
+  - name: agentgateway
+    namespace: agentgateway-system
+    chart: ../agentgateway-enterprise/ent-controller/install/generated/enterprise-agentgateway
+    values:
+    - licensing:
+        licenseKey: {{ $secrets.license }}
+      tokenExchange:
+        enabled: true
+        # URL should point to AGW control plane
+        issuer: "enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777"
+        tokenExpiration: 24h
+        subjectValidator:
+          validatorType: remote
+          remoteConfig:
+            # URL should point to Entra JWKS
+            url: "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/discovery/v2.0/keys"
+        # actorValidator and apiValidator are not used for our setup
+        actorValidator:
+          validatorType: k8s
+        apiValidator:
+          validatorType: remote
+          remoteConfig:
+            url: http://solo-enterprise-ui.agentgateway-system.svc.cluster.local:5556/keys
+        # Can be omitted for sqlite in memory
+        database:
+          type: postgres
+          postgres:
+            url: postgres://myuser:mypassword@postgres.postgres:5432/mydb
+
+      controller:
+        extraEnv:
+          #GORM_LOG_LEVEL: info
+          KGW_OAUTH_ISSUER_CONFIG: |
+            {
+              "gateway_config": {
+                "base_url": "https://mcp.k8s.example.com/oauth-issuer"
+              },
+              "downstream_server": {
+                "name": "downstream",
+                "client_id": "{{$secrets.entra.id}}",
+                "client_secret": "{{$secrets.entra.secret}}",
+                "authorize_url": "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/oauth2/v2.0/authorize",
+                "token_url": "https://login.microsoftonline.com/{{$secrets.entra.tenantId}}/oauth2/v2.0/token",
+                "scopes": [
+                  "api://{{$secrets.entra.id}}/agentgateway"
+                ]
+              }
+            }
+  - name: base-mcp-gateway
+    namespace: default
+    chart: ./base
+    values:
+    - common-values.yaml
+
+  - name: gitlab
+    namespace: default
+    chart: ./external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/gitlab
+      mcp:
+        host: gitlab.com
+        path: /api/v4/mcp
+      auth:
+        baseUrl: https://gitlab.com
+        scopes: [mcp]
+
+  - name: atlassian
+    namespace: default
+    chart: ./external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/atlassian
+      mcp:
+        host: mcp.atlassian.com
+        path: /v1/mcp
+      auth:
+        baseUrl: https://mcp.atlassian.com
+        scopes: [read:jira-work]
+
+  - name: github
+    namespace: default
+    chart: ./external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/github
+      mcp:
+        host: api.githubcopilot.com
+      auth:
+        clientId: '{{$secrets.github.id}}'
+        clientSecret: '{{$secrets.github.secret}}'
+        authorizeUrl: https://github.com/login/oauth/authorize
+        tokenUrl: https://github.com/login/oauth/access_token
+        scopes: [repo, read:org]
+
+  - name: cloudflare
+    namespace: default
+    chart: ./external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/cloudflare
+      mcp:
+        host: dns-analytics.mcp.cloudflare.com
+      auth:
+        baseUrl: https://dns-analytics.mcp.cloudflare.com
+
+  - name: linear
+    namespace: default
+    chart: ./external-mcp
+    values:
+    - common-values.yaml
+    - path: /mcp/linear
+      mcp:
+        host: mcp.linear.app
+      auth:
+        baseUrl: https://mcp.linear.app/

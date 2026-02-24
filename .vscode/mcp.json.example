@@ -1,0 +1,17 @@
+{
+	"servers": {
+		"github": {
+			"url": "https://mcp.k8s.example.com/mcp/github",
+			"type": "http"
+		},
+		"atlassian": {
+			"url": "https://mcp.k8s.example.com/mcp/atlassian",
+			"type": "http"
+		},
+		"gitlab": {
+			"url": "https://mcp.k8s.example.com/mcp/gitlab",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

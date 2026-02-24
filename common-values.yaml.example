@@ -1,0 +1,6 @@
+gateway:
+  name: mcp
+  externalAddress: https://mcp.example.com
+entra:
+  tenantId: YOUR_TENANT_ID
+  clientId: YOUR_CLIENT_ID

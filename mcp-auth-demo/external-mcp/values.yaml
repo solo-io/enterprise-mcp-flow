@@ -1,0 +1,33 @@
+# Name of gateway to connect to
+gateway:
+  name: ""
+  namespace: ""
+  # Example: https://mcp.example.com
+  externalAddress: ""
+# Path to expose at. For example, /mcp/gitlab
+path: ""
+# Example:
+# mcp:
+#   host: gitlab.com
+#   path: /api/v4/mcp
+mcp:
+  host: ""
+  port: 443
+  path: ""
+  tls: true
+auth:
+  # Base URL for deriving OAuth endpoints when authorizeUrl/tokenUrl/registrationUrl are not set.
+  baseUrl: ""
+  # Otherwise, set these. registrationUrl is optional; only set if you want DCR (and elide clientId/clientSecret)
+  authorizeUrl: ""
+  tokenUrl: ""
+  registrationUrl: ""
+
+  clientId: ""
+  clientSecret: ""
+  scopes: []
+entra:
+  tenantId: ""
+  clientId: ""
+  # Optional; explicit scopes configured. Otherwise, api://{{.Values.entra.clientId}}/agentgateway
+  scopes: []
