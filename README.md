@@ -29,6 +29,7 @@ Edit `client-secrets.yaml` with your real values. See the linked docs above for 
 - **`mcp-auth-demo/`** — Helm charts for the base gateway infrastructure and per-MCP-server resources. Do not modify.
 
 ## Setup
+### Setup with helmfile
 
 1. Install the Gateway API CRDs and AgentGateway CRDs:
 
@@ -50,6 +51,83 @@ kubectl create secret tls tls --cert=tls.crt --key=tls.key -n agentgateway-syste
 
 ```bash
 helmfile sync --file helmfile.yaml.gotmpl
+```
+
+### Without helmfile
+
+If you don't have helmfile installed, you can use plain `helm` and `kubectl` instead.
+
+#### 1. Install Enterprise AgentGateway
+
+Create a values file (e.g. `agentgateway-values.yaml`) with your settings. Replace all `YOUR_*` placeholders:
+
+```yaml
+licensing:
+  licenseKey: YOUR_LICENSE_KEY
+tokenExchange:
+  enabled: true
+  issuer: "enterprise-agentgateway.agentgateway-system.svc.cluster.local:7777"
+  tokenExpiration: 24h
+  subjectValidator:
+    validatorType: remote
+    remoteConfig:
+      url: "https://login.microsoftonline.com/YOUR_ENTRA_TENANT_ID/discovery/v2.0/keys"
+  actorValidator:
+    validatorType: k8s
+  apiValidator:
+    validatorType: remote
+    remoteConfig:
+      url: http://solo-enterprise-ui.agentgateway-system.svc.cluster.local:5556/keys
+  database:
+    type: postgres
+    postgres:
+      url: postgres://myuser:mypassword@postgres.postgres:5432/mydb
+controller:
+  extraEnv:
+    KGW_OAUTH_ISSUER_CONFIG: |
+      {
+        "gateway_config": {
+          "base_url": "YOUR_EXTERNAL_ADDRESS/oauth-issuer"
+        },
+        "downstream_server": {
+          "name": "downstream",
+          "client_id": "YOUR_ENTRA_CLIENT_ID",
+          "client_secret": "YOUR_ENTRA_CLIENT_SECRET",
+          "authorize_url": "https://login.microsoftonline.com/YOUR_ENTRA_TENANT_ID/oauth2/v2.0/authorize",
+          "token_url": "https://login.microsoftonline.com/YOUR_ENTRA_TENANT_ID/oauth2/v2.0/token",
+          "scopes": [
+            "api://YOUR_ENTRA_CLIENT_ID/agentgateway"
+          ]
+        }
+      }
+```
+
+Then install:
+
+```bash
+helm upgrade -i --create-namespace --namespace agentgateway-system enterprise-agentgateway \
+        PATH_TO_ENTERPRISE_AGENTGATEWAY_CHART \
+        -f agentgateway-values.yaml
+```
+
+Where `PATH_TO_ENTERPRISE_AGENTGATEWAY_CHART` is the path to the `enterprise-agentgateway` Helm chart (e.g. a local checkout at `agentgateway-enterprise/ent-controller/install/generated/enterprise-agentgateway`).
+
+#### 2. Install the resources
+
+Render the remaining helmfile releases on a machine that has helmfile, then apply them with `kubectl`:
+
+```bash
+# Render the resources (excluding the agentgateway install) to a single file
+helmfile template --file helmfile.yaml.gotmpl -l name!=enterprise-agentgateway > rendered.yaml
+
+# Then apply on any machine with kubectl
+kubectl apply -f rendered.yaml
+```
+
+Or render to a directory for easier inspection:
+
+```bash
+helmfile template --file helmfile.yaml.gotmpl -l name!=enterprise-agentgateway --output-dir rendered/
 ```
 
 ## Updating the TLS certificate
